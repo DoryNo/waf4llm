@@ -1,6 +1,6 @@
 # WAF для LLM — Anti-Injection Proxy
 
-Прокси между клиентом и LLM с многослойной защитой от prompt injection / jailbreak.
+Proxy between the client and the LLM with multi‑layered protection against prompt injection / jailbreak.
 
 ## Pipeline
 ```
