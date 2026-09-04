@@ -4,36 +4,36 @@ Proxy between the client and the LLM with multi‑layered protection against pro
 
 ## Benchmarks (frozen holdout)
 
-Честные метрики на замороженном holdout из публичных датасетов —
-1460 запросов (737 атак / 723 benign), фиксированный seed, без подбора порогов
-под тест (методология и провенанс: [benchmarks/eval_dataset.md](benchmarks/eval_dataset.md)):
+Honest metrics on a frozen holdout built from public datasets —
+1460 requests (737 attacks / 723 benign), fixed seed, no per-test threshold
+tuning (methodology and provenance: [benchmarks/eval_dataset.md](benchmarks/eval_dataset.md)):
 
-| Конфигурация | Detection rate (TPR) | FPR | Precision | F1 | Accuracy | p50, ms | p95, ms |
+| Configuration | Detection rate (TPR) | FPR | Precision | F1 | Accuracy | p50, ms | p95, ms |
 |---|---|---|---|---|---|---|---|
-| heuristic-only (правила, ~regex) | 1.1% | 0.0% | 1.000 | 0.021 | 0.50 | 0.5 | 4.3 |
+| heuristic-only (39 YAML rules, ~regex) | 1.1% | 0.0% | 1.000 | 0.021 | 0.50 | 0.5 | 4.3 |
 | classifier-only (DeBERTa-v3) | 46.8% | 0.7% | 0.986 | 0.635 | 0.73 | 105 | 360 |
-| full-pipeline (эвристики + классификатор) | 47.2% | 0.7% | 0.986 | 0.638 | 0.73 | 95 | 350 |
+| full-pipeline (heuristics + classifier) | 47.2% | 0.7% | 0.986 | 0.638 | 0.73 | 95 | 350 |
 
-Выводы из этой таблицы:
+Takeaways:
 
-* **regex-базовая линия почти бесполезна на реальных атаках**: 39 правил
-  ловят 1.1% атак (и 0% FP). Обфусцированные и ролевые джейлбрейки не матчатся
-  ключевыми словами — именно это мотивирует ML-слой.
-* **Классификатор детектирует 77.5% верифицированных джейлбрейков**
-  (259 из 334, по методам JailbreakBench/vicuna: JBC 100%, DSN 93.7%, GCG 61.3%,
-  PAIR 44.9%) при FPR 0.7% на benign-трафике (Alpaca + in-domain benign).
-* **In-domain инъекции (deepset/prompt-injections): 17.0%** — короткие тексты и
-  шум разметки; плюс частичное пересечение с тренировочной выборкой
-  (contamination, см. Limitations).
-* **AdvBench (вредоносные, но не инъекционные промпты): 0%** — это честная
-  граница скоупа pre-inference WAF против prompt injection, а не фильтр
-  вредоносного контента (см. Limitations).
+* **The regex baseline is nearly useless on real attacks**: 39 rules catch
+  1.1% of attacks (with 0% FP). Obfuscated and role-play jailbreaks do not
+  match keyword patterns — which is exactly what motivates the ML layer.
+* **The classifier detects 77.5% of verified jailbreaks** (259 of 334; by
+  JailbreakBench/vicuna method: JBC 100%, DSN 93.7%, GCG 61.3%, PAIR 44.9%)
+  at 0.7% FPR on benign traffic (Alpaca + in-domain benign).
+* **In-domain injections (deepset/prompt-injections): 17.0%** — short texts
+  and noisy labels; part of this dataset also overlaps the classifier's
+  training distribution (contamination, see Limitations).
+* **AdvBench (harmful but not injection-style prompts): 0%** — an honest
+  scope boundary: this is a pre-inference WAF against prompt injection, not a
+  harmful-content filter (see Limitations).
 
-Воспроизведение:
+Reproduce:
 
 ```bash
-python benchmarks/freeze_eval_set.py   # собрать замороженный holdout
-python benchmarks/run_eval.py          # прогнать 3 конфигурации
+python benchmarks/freeze_eval_set.py   # build the frozen holdout
+python benchmarks/run_eval.py          # run the 3 configurations
 ```
 
 ## Pipeline
@@ -78,33 +78,33 @@ the optional ML dependencies with `pip install -e ".[ml]"`.
 
 ## Limitations
 
-Честные границы применимости — там, где система не помогает или измерена с оговорками:
+Honest boundaries of applicability — where the system does not help, or where
+the measurements carry caveats:
 
-* **Streaming: HTTP 200 уже отправлен.** В streaming-режиме прокси перестаёт
-  пересылать токены, как только ловит canary-утечку в выводе, но HTTP-статус
-  `200` к этому моменту уже отправлен клиенту. Гарантия output guard
-  («запрос не дойдёт до LLM / ответ не уйдёт клиенту») сильна только в
-  non-streaming режиме.
-* **Скоуп: инъекции, а не вредоносный контент.** Pre-inference WAF ловит
-  prompt injection / jailbreak, а не тематическую вредоносность. AdvBench
-  (прямые вредоносные запросы без инъекционной обёртки) детектируется на 0% —
-  это осознанный trade-off, для вредоносного контента нужен отдельный
-  safety-классификатор.
-* **In-domain инъекции детектируются слабо (17%).** На short-текстах
-  deepset/prompt-injections классификатор уверенно ловит только явные
-  конструкции; часть датасета пересекается с его тренировочной выборкой
-  (оценка оптимистична), а шумная разметка завышает FN.
-* **Adversarial-обфускация частично пробивает ML-слой.** GCG-суффиксы ловятся
-  на 61%, PAIR-ролевые промпты — на 45%: генерируемые атаки разменивают
-  читаемость на устойчивость к классификаторам. Эвристики тут не помогают
-  (0%), поэтому в roadmap — perplexity-детектор и дообучение на collected
-  borderline-кейсах (Phase 10).
-* **Латентность на CPU.** Классификатор (DeBERTa-v3-base) на CPU: p50 ~105 мс,
-  p95 ~360 мс на один запрос (замеры in-process, батч = 1 запрос). Для
-  прод-латентностей нужен GPU или ONNX-экспорт.
-* **Latency в benchmarks — in-process.** Замеры измеряют стоимость
-  `run_pre_inference` без сетевого хопа прокси (без HTTP-overhead), т.е. это
-  нижняя граница сквозной задержки.
+* **Streaming: HTTP 200 is already sent.** In streaming mode the proxy stops
+  forwarding tokens as soon as it catches a canary leak in the output, but the
+  HTTP `200` status has already been sent to the client by then. The output
+  guard guarantee ("the response never reaches the client") is only strong in
+  non-streaming mode.
+* **Scope: injections, not harmful content.** The pre-inference WAF catches
+  prompt injection / jailbreak, not topic-level harmfulness. AdvBench (direct
+  harmful requests with no injection wrapper) is detected at 0% — a deliberate
+  trade-off; harmful content would need a separate safety classifier.
+* **In-domain injections are detected weakly (17%).** On the short texts of
+  deepset/prompt-injections the classifier only reliably catches explicit
+  constructions; part of the dataset overlaps its training distribution
+  (the estimate is optimistic), and noisy labels inflate FN.
+* **Adversarial obfuscation partially breaks through the ML layer.** GCG
+  suffixes are caught at 61%, PAIR role-play prompts at 45%: generated attacks
+  trade readability for resistance to classifiers. Heuristics do not help here
+  (0%), so the roadmap includes a perplexity detector and fine-tuning on
+  collected borderline cases (Phase 10).
+* **CPU latency.** The classifier (DeBERTa-v3-base) on CPU: p50 ~105 ms,
+  p95 ~360 ms per request (in-process measurement, batch = 1 request).
+  Production latencies need a GPU or ONNX export.
+* **Benchmark latency is in-process.** The measurements cover the cost of
+  `run_pre_inference` without the network hop through the proxy (no HTTP
+  overhead), i.e. a lower bound on end-to-end latency.
 
 ## Project layout
 ```
@@ -211,50 +211,51 @@ successful build, so nothing is trained on twice.
 
 ## Development process
 
-История коммитов в репозитории сжата (базовые фазы шли одной веткой), поэтому
-ниже — реальный путь разработки: что делалось, что ломалось и как чинилось.
-Каждая фаза закрывалась тестами; на момент публикации — 156 тестов
-(`pytest -q`, все зелёные), плюс ruff и mypy в CI.
+The commit history in this repository is compressed (the base phases were
+built on a single branch), so below is the actual development path: what was
+done, what broke, and how it was fixed. Every phase was closed with tests;
+at publication time there are 156 tests (`pytest -q`, all green) plus ruff
+and mypy in CI.
 
-| Фаза | Что сделано | Проверка |
+| Phase | What was built | Verification |
 |---|---|---|
-| 0-2 | Скелет прокси, provenance-тегирование, anti-evasion normalization (unicode/NFC/homoglyphs/zero-width) | юнит-тесты на каждый слой |
-| 3 | Heuristic layer: 39 YAML-правил, versioned rules_mtime в detections | тесты на правила + granular levels |
-| 4 | Classifier layer (DeBERTa-v3), per-tag scoring | тесты с mock-моделью |
-| 5 | Decision engine (graduated response: allow/log/sanitize/exclude/block), orchestrator | e2e-тесты пайплайна |
-| 6 | Output guard: canary injection + canary-drift check | тесты canary путей |
-| 7 | XAI: attention-атрибуции на горячем пути, Integrated Gradients (Captum) on-demand CLI | тесты + живая проверка токенов |
-| 8 | XAI-персистенция (attributions) + dashboard-секция | тесты + live-проверка через прокси |
-| 9 | Observability: request/detection logs, Streamlit dashboard, Slack-алерты | интеграционные тесты |
-| 10 | Retrain loop: collector → dataset → fine-tune → registry (promote/rollback) | 14 тестов, live-прогон |
+| 0-2 | Proxy skeleton, provenance tagging, anti-evasion normalization (unicode/NFC/homoglyphs/zero-width) | unit tests per layer |
+| 3 | Heuristic layer: 39 YAML rules, versioned rules_mtime persisted in detections | rule tests + granular levels |
+| 4 | Classifier layer (DeBERTa-v3), per-tag scoring | tests with a mock model |
+| 5 | Decision engine (graduated response: allow/log/sanitize/exclude/block), orchestrator | pipeline e2e tests |
+| 6 | Output guard: canary injection + canary-drift check | canary-path tests |
+| 7 | XAI: attention attributions on the hot path, Integrated Gradients (Captum) on-demand CLI | tests + live token checks |
+| 8 | XAI persistence (attributions) + dashboard section | tests + live check through the proxy |
+| 9 | Observability: request/detection logs, Streamlit dashboard, Slack alerts | integration tests |
+| 10 | Retrain loop: collector → dataset → fine-tune → registry (promote/rollback) | 14 tests, live run |
 
-Реальные отладочные итерации (то, за чем обычно ходят в code review):
+Real debugging iterations (the kind reviewers usually look for):
 
-* **transformers 5.x сломал совместимость** — `BertTokenizer` больше не
-  грузится по имени модели, потребовалась инициализация через `vocab=` dict;
-  SDPA attention возвращает `None` вместо весов — модель грузится с
-  `attn_implementation="eager"`, когда включён XAI.
-* **Контракт Captum IntegratedGradients** — forward-функция должна возвращать
-  корректную форму; пришлось срезать attention-тензоры по батчу вручную
-  (`attention[:, :, 0, :]` — CLS-строка), чтобы батч-инференс не отдавал
-  атрибуции чужих запросов.
-* **Восстановление HF-кеша после битого снапшота** — blob с именем по etag +
-  hardlink в `snapshots/<rev>/` вместо бесконечно зависшего
-  `snapshot_download`; проверено загрузкой в offline-режиме.
-* **Fail-open vs fail-closed** на уровне каждого слоя (решение в
-  orchestrator: ошибка слоя → block при `FAIL_MODE=closed`, allow+лог при
-  open) — покрыто тестами.
-* **Живые прогоны** через реальный прокси-эндпоинт: инъекция → 403 block,
-  benign → пайплайн пропускает (allow), attribution-токены пишутся в БД,
-  borderline-кейс попадает в retrain-очередь и доезжает до
+* **transformers 5.x broke compatibility** — `BertTokenizer` no longer loads
+  by model name; it needed initialization via a `vocab=` dict. SDPA attention
+  returns `None` instead of weights — the model is loaded with
+  `attn_implementation="eager"` whenever XAI is enabled.
+* **The Captum IntegratedGradients contract** — the forward function must
+  return the correct shape; attention tensors had to be sliced per batch
+  manually (`attention[:, :, 0, :]` — the CLS row) so batch inference would
+  not attribute other requests' tokens.
+* **HF cache recovery after a broken snapshot** — a blob named by etag +
+  hardlink into `snapshots/<rev>/` instead of an endlessly hung
+  `snapshot_download`; verified by loading in offline mode.
+* **Fail-open vs fail-closed per layer** (decided in the orchestrator: a layer
+  error → block under `FAIL_MODE=closed`, allow+log when open) — covered by
+  tests.
+* **Live runs** against the real proxy endpoint: injection → 403 block,
+  benign → the pipeline lets it through (allow), attribution tokens are
+  written to the DB, a borderline case lands in the retrain queue and reaches
   `train.jsonl`.
 
-Как воспроизвести весь цикл проверки:
+How to reproduce the full verification cycle:
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                          # 156 тестов
+pytest -q                          # 156 tests
 ruff check . && mypy src
 python benchmarks/freeze_eval_set.py
-python benchmarks/run_eval.py      # метрики из таблицы выше
+python benchmarks/run_eval.py      # the metrics from the table above
 ```
