@@ -1,4 +1,4 @@
-# WAF для LLM — Anti-Injection Proxy
+# WAF for LLM — Anti-Injection Proxy
 
 Proxy between the client and the LLM with multi‑layered protection against prompt injection / jailbreak.
 
