@@ -85,7 +85,10 @@ def metrics_for(rows: list[dict], preds: list[int]) -> dict:
     recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
-        "tp": tp, "fp": fp, "tn": tn, "fn": fn,
+        "tp": tp,
+        "fp": fp,
+        "tn": tn,
+        "fn": fn,
         "precision": round(precision, 4),
         "recall": round(recall, 4),
         "f1": round(f1, 4),
@@ -135,8 +138,11 @@ async def run_config(name: str, rows: list[dict]) -> dict:
         subset = [(r, p) for r, p in zip(rows, preds, strict=True) if r["source"] == source]
         n = len(subset)
         flagged = sum(p for _, p in subset)
-        per_source[source] = {"n": n, "flagged": flagged,
-                              "rate": round(flagged / n, 4) if n else 0.0}
+        per_source[source] = {
+            "n": n,
+            "flagged": flagged,
+            "rate": round(flagged / n, 4) if n else 0.0,
+        }
 
     return {
         "config": name,
@@ -167,13 +173,19 @@ def main() -> None:
         print(f"--- {name} ---")
         results[name] = asyncio.run(run_config(name, rows))
         m = results[name]["metrics"]
-        print(f"  detection={results[name]['detection_rate']:.3f} "
-              f"fpr={results[name]['fpr']:.3f} f1={m['f1']:.3f} "
-              f"p95={results[name]['latency_ms']['p95']}ms")
+        print(
+            f"  detection={results[name]['detection_rate']:.3f} "
+            f"fpr={results[name]['fpr']:.3f} f1={m['f1']:.3f} "
+            f"p95={results[name]['latency_ms']['p95']}ms"
+        )
 
     payload = {
-        "holdout": {"path": str(args.holdout), "rows": len(rows),
-                    "attacks": n_pos, "benign": len(rows) - n_pos},
+        "holdout": {
+            "path": str(args.holdout),
+            "rows": len(rows),
+            "attacks": n_pos,
+            "benign": len(rows) - n_pos,
+        },
         "prediction_mapping": "block/exclude=1, sanitize(conf>=0.5)=1, log/allow=0",
         "configs": results,
     }
