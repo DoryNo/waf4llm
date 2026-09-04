@@ -1,0 +1,221 @@
+{
+  "holdout": {
+    "path": "data\\eval\\benchmark_holdout.jsonl",
+    "rows": 1460,
+    "attacks": 737,
+    "benign": 723
+  },
+  "prediction_mapping": "block/exclude=1, sanitize(conf>=0.5)=1, log/allow=0",
+  "configs": {
+    "heuristic-only": {
+      "config": "heuristic-only",
+      "flags": {
+        "ENABLE_HEURISTIC": "true",
+        "ENABLE_CLASSIFIER": "false"
+      },
+      "metrics": {
+        "tp": 8,
+        "fp": 0,
+        "tn": 723,
+        "fn": 729,
+        "precision": 1.0,
+        "recall": 0.0109,
+        "f1": 0.0215,
+        "accuracy": 0.5007
+      },
+      "detection_rate": 0.0109,
+      "fpr": 0.0,
+      "decisions": {
+        "allow": 1450,
+        "sanitize": 4,
+        "log": 2,
+        "exclude": 1,
+        "block": 3
+      },
+      "latency_ms": {
+        "mean": 0.78,
+        "p50": 0.45,
+        "p95": 4.3,
+        "p99": 4.48,
+        "max": 11.0
+      },
+      "per_source": {
+        "advbench": {
+          "n": 200,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "alpaca": {
+          "n": 380,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "jbb_dsn": {
+          "n": 95,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "jbb_gcg": {
+          "n": 80,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "jbb_jbc": {
+          "n": 90,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "jbb_pair": {
+          "n": 69,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "pi": {
+          "n": 546,
+          "flagged": 8,
+          "rate": 0.0147
+        }
+      }
+    },
+    "classifier-only": {
+      "config": "classifier-only",
+      "flags": {
+        "ENABLE_HEURISTIC": "false",
+        "ENABLE_CLASSIFIER": "true"
+      },
+      "metrics": {
+        "tp": 345,
+        "fp": 5,
+        "tn": 718,
+        "fn": 392,
+        "precision": 0.9857,
+        "recall": 0.4681,
+        "f1": 0.6348,
+        "accuracy": 0.7281
+      },
+      "detection_rate": 0.4681,
+      "fpr": 0.0069,
+      "decisions": {
+        "allow": 1107,
+        "block": 342,
+        "log": 3,
+        "exclude": 4,
+        "sanitize": 4
+      },
+      "latency_ms": {
+        "mean": 147.66,
+        "p50": 104.74,
+        "p95": 360.19,
+        "p99": 437.5,
+        "max": 6592.25
+      },
+      "per_source": {
+        "advbench": {
+          "n": 200,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "alpaca": {
+          "n": 380,
+          "flagged": 1,
+          "rate": 0.0026
+        },
+        "jbb_dsn": {
+          "n": 95,
+          "flagged": 89,
+          "rate": 0.9368
+        },
+        "jbb_gcg": {
+          "n": 80,
+          "flagged": 49,
+          "rate": 0.6125
+        },
+        "jbb_jbc": {
+          "n": 90,
+          "flagged": 90,
+          "rate": 1.0
+        },
+        "jbb_pair": {
+          "n": 69,
+          "flagged": 31,
+          "rate": 0.4493
+        },
+        "pi": {
+          "n": 546,
+          "flagged": 90,
+          "rate": 0.1648
+        }
+      }
+    },
+    "full-pipeline": {
+      "config": "full-pipeline",
+      "flags": {
+        "ENABLE_HEURISTIC": "true",
+        "ENABLE_CLASSIFIER": "true"
+      },
+      "metrics": {
+        "tp": 348,
+        "fp": 5,
+        "tn": 718,
+        "fn": 389,
+        "precision": 0.9858,
+        "recall": 0.4722,
+        "f1": 0.6385,
+        "accuracy": 0.7301
+      },
+      "detection_rate": 0.4722,
+      "fpr": 0.0069,
+      "decisions": {
+        "allow": 1102,
+        "block": 342,
+        "sanitize": 7,
+        "log": 5,
+        "exclude": 4
+      },
+      "latency_ms": {
+        "mean": 116.42,
+        "p50": 95.36,
+        "p95": 350.46,
+        "p99": 387.25,
+        "max": 920.33
+      },
+      "per_source": {
+        "advbench": {
+          "n": 200,
+          "flagged": 0,
+          "rate": 0.0
+        },
+        "alpaca": {
+          "n": 380,
+          "flagged": 1,
+          "rate": 0.0026
+        },
+        "jbb_dsn": {
+          "n": 95,
+          "flagged": 89,
+          "rate": 0.9368
+        },
+        "jbb_gcg": {
+          "n": 80,
+          "flagged": 49,
+          "rate": 0.6125
+        },
+        "jbb_jbc": {
+          "n": 90,
+          "flagged": 90,
+          "rate": 1.0
+        },
+        "jbb_pair": {
+          "n": 69,
+          "flagged": 31,
+          "rate": 0.4493
+        },
+        "pi": {
+          "n": 546,
+          "flagged": 93,
+          "rate": 0.1703
+        }
+      }
+    }
+  }
+}
