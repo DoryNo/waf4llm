@@ -1,0 +1,212 @@
+# Heuristic rules — hot-reloadable (Phase 4.3)
+# Each rule: pattern (Python regex, case-insensitive by default), weight 0..1, label, optional tags
+# Weight maps to graduated response: 0.85+ -> block, 0.70+ -> exclude, 0.55+ -> sanitize, 0.30+ -> log
+# Provenance multipliers: RET *0.4, TOOL *0.5
+
+rules:
+  # High-confidence direct prompt injection (EN)
+  - pattern: 'ignore\s+(all\s+)?(previous|above|prior)\s+instructions'
+    weight: 0.85
+    label: ignore-previous-instructions
+    tags: [prompt-injection, en]
+
+  - pattern: 'disregard\s+(all\s+)?(previous|above|prior)(\s+instructions)?'
+    weight: 0.80
+    label: disregard-previous
+    tags: [prompt-injection, en]
+
+  - pattern: 'forget\s+(all\s+)?(previous|above|prior)(\s+instructions)?'
+    weight: 0.78
+    label: forget-previous
+    tags: [prompt-injection, en]
+
+  - pattern: 'override\s+(previous|above|prior|system)\s+(instructions|prompt|rules)'
+    weight: 0.82
+    label: override-instructions
+    tags: [prompt-injection, en]
+
+  # High-confidence RU prompt injection
+  - pattern: 'игнорируй\s+(все\s+)?(предыдущие|прошлые|выше|системные)\s+(инструкции|указания|промпты)'
+    weight: 0.85
+    label: ignore-previous-instructions-ru
+    tags: [prompt-injection, ru]
+
+  - pattern: 'забудь\s+(все\s+)?(предыдущие|прошлые|выше)\s+(инструкции|указания)'
+    weight: 0.80
+    label: forget-previous-ru
+    tags: [prompt-injection, ru]
+
+  - pattern: 'не\s+обращай\s+внимания\s+на\s+(предыдущие|прошлые)\s+(инструкции|указания)'
+    weight: 0.80
+    label: disregard-previous-ru
+    tags: [prompt-injection, ru]
+
+  - pattern: 'отмени\s+(предыдущие|прошлые|системные)\s+(инструкции|указания|команды)'
+    weight: 0.82
+    label: override-instructions-ru
+    tags: [prompt-injection, ru]
+
+  # Role hijack / DAN
+  - pattern: 'you\s+are\s+now\s+(a\s+)?(dan|jailbreak|unrestricted|unfiltered|unlimited)'
+    weight: 0.90
+    label: role-hijack-dan
+    tags: [jailbreak, en]
+
+  - pattern: 'ты\s+теперь\s+(dan|джейлбрейк|без\s+ограничений|неограниченный)'
+    weight: 0.90
+    label: role-hijack-dan-ru
+    tags: [jailbreak, ru]
+
+  - pattern: '\bdan\b.*\bmode\b|jailbreak\s+mode|unrestricted\s+mode'
+    weight: 0.85
+    label: dan-mode
+    tags: [jailbreak, en]
+
+  - pattern: 'developer\s+mode|god\s+mode|админ\s+режим|режим\s+разработчика'
+    weight: 0.70
+    label: privileged-mode-request
+    tags: [jailbreak, en, ru]
+
+  # Fake system prompt markers
+  - pattern: 'system\s*:\s*you\s+are'
+    weight: 0.70
+    label: fake-system-prompt
+    tags: [spoofing, en]
+
+  - pattern: '\[SYSTEM\]|\[INST\]|\<\|\s*im_start\s*\|>|\<\|\s*system\s*\|>'
+    weight: 0.75
+    label: fake-chat-markers
+    tags: [spoofing, en]
+
+  - pattern: '###\s*(instruction|system|human)\s*:'
+    weight: 0.72
+    label: fake-md-markers
+    tags: [spoofing, en]
+
+  # Prompt extraction
+  - pattern: 'reveal\s+(your\s+)?(system|initial|original)\s+prompt'
+    weight: 0.85
+    label: prompt-extraction
+    tags: [extraction, en]
+
+  - pattern: 'repeat\s+(your\s+)?(system|initial)\s+(prompt|instructions)'
+    weight: 0.80
+    label: prompt-extraction-repeat
+    tags: [extraction, en]
+
+  - pattern: 'раскрой\s+(свой\s+)?(системный|начальный|исходный)\s+промпт'
+    weight: 0.85
+    label: prompt-extraction-ru
+    tags: [extraction, ru]
+
+  - pattern: 'покажи\s+(свой\s+)?(системный\s+)?промпт|выведи\s+промпт'
+    weight: 0.80
+    label: prompt-extraction-ru-2
+    tags: [extraction, ru]
+
+  - pattern: 'what\s+(is|was)\s+your\s+(system\s+)?prompt'
+    weight: 0.82
+    label: prompt-extraction-what
+    tags: [extraction, en]
+
+  # DAN / jailbreak triggers
+  - pattern: 'do\s+anything\s+now'
+    weight: 0.75
+    label: dan-trigger
+    tags: [jailbreak, en]
+
+  - pattern: 'делай\s+что\s+хочешь|делай\s+всё\s+что\s+попрошу'
+    weight: 0.75
+    label: dan-trigger-ru
+    tags: [jailbreak, ru]
+
+  # Exfiltration
+  - pattern: 'exfiltrate|leak\s+(secrets?|keys?|tokens?|credentials?|passwords?)'
+    weight: 0.70
+    label: exfiltration-intent
+    tags: [exfiltration, en]
+
+  - pattern: 'слить\s+(секреты|ключи|токены|пароли|данные)'
+    weight: 0.70
+    label: exfiltration-intent-ru
+    tags: [exfiltration, ru]
+
+  # Code / tool execution
+  - pattern: 'execute\s+(the\s+)?(following\s+)?(code|command|tool|function)'
+    weight: 0.60
+    label: code-execution-request
+    tags: [tool-abuse, en]
+
+  - pattern: 'выполни\s+(следующий\s+)?(код|команду|инструмент|функцию)'
+    weight: 0.60
+    label: code-execution-request-ru
+    tags: [tool-abuse, ru]
+
+  - pattern: '```\s*(python|bash|sh|javascript|sql)'
+    weight: 0.45
+    label: code-block
+    tags: [code, en]
+
+  # Bypass safety
+  - pattern: 'bypass\s+(safety|filter|guardrail|policy|moderation)'
+    weight: 0.80
+    label: bypass-request
+    tags: [jailbreak, en]
+
+  - pattern: 'обойди\s+(защиту|фильтр|модерацию|политику|ограничения)'
+    weight: 0.80
+    label: bypass-request-ru
+    tags: [jailbreak, ru]
+
+  - pattern: 'jailbreak|jail\s*break'
+    weight: 0.65
+    label: jailbreak-keyword
+    tags: [jailbreak, en]
+
+  - pattern: 'джейлбрейк'
+    weight: 0.65
+    label: jailbreak-keyword-ru
+    tags: [jailbreak, ru]
+
+  # Social engineering / roleplay
+  - pattern: 'pretend\s+(you\s+are|to\s+be)\s+'
+    weight: 0.62
+    label: roleplay-pretend
+    tags: [social-engineering, en]
+
+  - pattern: 'притворись\s+(что\s+ты|кем|что\s+ты)'
+    weight: 0.62
+    label: roleplay-pretend-ru
+    tags: [social-engineering, ru]
+
+  - pattern: 'roleplay\s+as\s+|role\s*play\s+as\s+'
+    weight: 0.60
+    label: roleplay-as
+    tags: [social-engineering, en]
+
+  - pattern: 'act\s+as\s+(if\s+you\s+are\s+)?(a\s+)?(hacker|admin|root|system)'
+    weight: 0.68
+    label: act-as-privileged
+    tags: [social-engineering, en]
+
+  - pattern: 'from\s+now\s+on\s+you\s+(are|will)'
+    weight: 0.66
+    label: from-now-on
+    tags: [prompt-injection, en]
+
+  - pattern: 'отныне\s+ты\s+'
+    weight: 0.66
+    label: from-now-on-ru
+    tags: [prompt-injection, ru]
+
+  # Instruction hierarchy
+  - pattern: 'higher\s+priority\s+than\s+(system|previous)'
+    weight: 0.78
+    label: priority-hijack
+    tags: [prompt-injection, en]
+
+  # Indirect injection markers
+  - pattern: 'the\s+following\s+(is\s+)?(is\s+)?(a\s+)?(hidden|secret)\s+instruction'
+    weight: 0.74
+    label: hidden-instruction
+    tags: [indirect, en]

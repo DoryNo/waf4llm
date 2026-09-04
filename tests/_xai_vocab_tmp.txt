@@ -1,0 +1,10 @@
+[PAD]
+[UNK]
+[CLS]
+[SEP]
+ignore
+all
+previous
+instructions
+hello
+world
