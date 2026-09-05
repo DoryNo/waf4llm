@@ -26,3 +26,7 @@ benchmarks/report.json
 Thumbs.db
 .idea/
 .vscode/
+
+.eval_ppl_cache.json
+benchmarks/results_*.json
+!benchmarks/results.json
