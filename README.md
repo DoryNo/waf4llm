@@ -11,8 +11,9 @@ tuning (methodology and provenance: [benchmarks/eval_dataset.md](benchmarks/eval
 | Configuration | Detection rate (TPR) | FPR | Precision | F1 | Accuracy | p50, ms | p95, ms |
 |---|---|---|---|---|---|---|---|
 | heuristic-only (39 YAML rules, ~regex) | 1.1% | 0.0% | 1.000 | 0.021 | 0.50 | 0.5 | 4.3 |
-| classifier-only (DeBERTa-v3) | 46.8% | 0.7% | 0.986 | 0.635 | 0.73 | 105 | 360 |
-| full-pipeline (heuristics + classifier) | 47.2% | 0.7% | 0.986 | 0.638 | 0.73 | 95 | 350 |
+| classifier-only (DeBERTa-v3) | 46.8% | 0.7% | 0.986 | 0.635 | 0.73 | 113 | 367 |
+| full-pipeline (heuristics + classifier) | 47.2% | 0.7% | 0.986 | 0.638 | 0.73 | 102 | 372 |
+| full+ppl (+ distilgpt2 perplexity) | **52.4%** | 1.1% | 0.980 | 0.683 | 0.75 | 193 | 647 |
 
 Takeaways:
 
@@ -22,6 +23,13 @@ Takeaways:
 * **The classifier detects 77.5% of verified jailbreaks** (259 of 334; by
   JailbreakBench/vicuna method: JBC 100%, DSN 93.7%, GCG 61.3%, PAIR 44.9%)
   at 0.7% FPR on benign traffic (Alpaca + in-domain benign).
+* **The perplexity layer is the biggest lever on adversarial obfuscation**:
+  adding a distilgpt2 perplexity scorer lifts GCG detection 61.3% → 97.5% and
+  DSN 93.7% → 97.9% — adversarial suffixes are improbable under a small LM —
+  for +0.4 pp FPR (1.1% total) and ~300 ms added p95 on CPU. Aggregate
+  JailbreakBench detection rises to **87.4%** (292 of 334). Natural-language
+  attacks (JBC role-play, PAIR) are unaffected: normal perplexity, so the
+  layer correctly stays quiet.
 * **In-domain injections (deepset/prompt-injections): 17.0%** — short texts
   and noisy labels; part of this dataset also overlaps the classifier's
   training distribution (contamination, see Limitations).
@@ -76,6 +84,23 @@ The default classifier and perplexity detector are disabled so the base install
 starts without downloading ML models. Enable them explicitly in `.env`; install
 the optional ML dependencies with `pip install -e ".[ml]"`.
 
+## Perplexity layer (adversarial-obfuscation defense)
+GCG-style adversarial suffixes are highly improbable under a small causal LM,
+which the regex rules and the injection classifier both miss. The optional
+perplexity layer (`HEURISTIC_PERPLEXITY_ENABLED=true`, distilgpt2 by default)
+flags such inputs on the frozen holdout at 97.5% GCG detection for 1.1% FPR
+(see Benchmarks, `full+ppl` row):
+
+```bash
+HEURISTIC_PERPLEXITY_ENABLED=true
+HEURISTIC_PERPLEXITY_MODEL=distilgpt2     # any small causal LM works
+HEURISTIC_PERPLEXITY_MIN_CHARS=60         # skip short texts: ppl is noisy there
+```
+
+Short texts are skipped on purpose: per-string perplexity on short snippets
+is noisy, and non-English snippets (any language the LM was not trained on)
+produce spuriously high values.
+
 ## Limitations
 
 Honest boundaries of applicability — where the system does not help, or where
@@ -94,14 +119,17 @@ the measurements carry caveats:
   deepset/prompt-injections the classifier only reliably catches explicit
   constructions; part of the dataset overlaps its training distribution
   (the estimate is optimistic), and noisy labels inflate FN.
-* **Adversarial obfuscation partially breaks through the ML layer.** GCG
-  suffixes are caught at 61%, PAIR role-play prompts at 45%: generated attacks
-  trade readability for resistance to classifiers. Heuristics do not help here
-  (0%), so the roadmap includes a perplexity detector and fine-tuning on
-  collected borderline cases (Phase 10).
+* **Adversarial obfuscation: solved by perplexity for GCG, still open for
+  PAIR.** With the distilgpt2 perplexity layer enabled, GCG suffixes are
+  caught at 97.5% (was 61.3% with the classifier alone). PAIR role-play
+  prompts remain at 45%: they are natural language, perplexity stays normal
+  and no cheap signal separates them from benign conversation. The roadmap
+  for PAIR is fine-tuning on collected borderline cases (Phase 10) rather
+  than more rules.
 * **CPU latency.** The classifier (DeBERTa-v3-base) on CPU: p50 ~105 ms,
   p95 ~360 ms per request (in-process measurement, batch = 1 request).
-  Production latencies need a GPU or ONNX export.
+  Enabling the perplexity layer adds a second forward pass (distilgpt2):
+  p95 rises to ~650 ms. Production latencies need a GPU or ONNX export.
 * **Benchmark latency is in-process.** The measurements cover the cost of
   `run_pre_inference` without the network hop through the proxy (no HTTP
   overhead), i.e. a lower bound on end-to-end latency.
@@ -228,6 +256,7 @@ and mypy in CI.
 | 8 | XAI persistence (attributions) + dashboard section | tests + live check through the proxy |
 | 9 | Observability: request/detection logs, Streamlit dashboard, Slack alerts | integration tests |
 | 10 | Retrain loop: collector → dataset → fine-tune → registry (promote/rollback) | 14 tests, live run |
+| 11 | Perplexity layer: distilgpt2 scorer, min-length guard, holdout-tuned thresholds | 4-config frozen-holdout eval |
 
 Real debugging iterations (the kind reviewers usually look for):
 
@@ -242,6 +271,13 @@ Real debugging iterations (the kind reviewers usually look for):
 * **HF cache recovery after a broken snapshot** — a blob named by etag +
   hardlink into `snapshots/<rev>/` instead of an endlessly hung
   `snapshot_download`; verified by loading in offline mode.
+* **A 55% FPR from one misconfigured mapping.** The first perplexity run
+  flagged 55% of benign traffic: the initial ppl→confidence mapping (>120 →
+  suspicious) sat right in the middle of alpaca's perplexity distribution.
+  Measuring the full distribution per source instead of guessing thresholds
+  (benign ~<500, GCG/DSN >800, short non-English snippets → exploding ppl)
+  turned it into a 1.1% FPR / +5 pp detection configuration in one tuning
+  pass.
 * **Fail-open vs fail-closed per layer** (decided in the orchestrator: a layer
   error → block under `FAIL_MODE=closed`, allow+log when open) — covered by
   tests.

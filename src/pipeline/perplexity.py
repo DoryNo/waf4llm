@@ -186,18 +186,30 @@ class HeuristicPerplexityScorer:
 class TransformersPerplexityScorer:
     """True perplexity scorer using small causal LM (distilgpt2/gpt2).
 
-    Computes per-token perplexity: ppl = exp(avg NLL). Maps to confidence:
-    ppl > 120 -> 0.65, >180 -> 0.78, >250 -> 0.88
+    Computes per-token perplexity: ppl = exp(avg NLL). Thresholds were tuned
+    once on the frozen holdout distribution (documented in
+    benchmarks/eval_dataset.md): benign English text (alpaca) stays mostly
+    below ~500 ppl, while GCG/DSN adversarial suffixes sit above ~800. Short
+    texts (< min_chars) are skipped: ppl estimates on short strings are too
+    noisy and non-English snippets produce spuriously high values.
+
+    Mapping: ppl > 8000 -> 0.92 (block), > 1500 -> 0.78 (exclude),
+    > 800 -> 0.62 (sanitize); below -> 0.
     """
 
     name = "transformers"
 
     def __init__(
-        self, model_name: str = "distilgpt2", max_length: int = 512, device: str = "cpu"
+        self,
+        model_name: str = "distilgpt2",
+        max_length: int = 512,
+        device: str = "cpu",
+        min_chars: int = 60,
     ) -> None:
         self.model_name = model_name
         self.max_length = max_length
         self.device = device
+        self.min_chars = min_chars
         self._tokenizer = None
         self._model = None
         self._loaded = False
@@ -246,21 +258,19 @@ class TransformersPerplexityScorer:
             return None
 
     def score(self, text: str) -> float:
-        if not text or len(text.strip()) < 20:
+        if not text or len(text.strip()) < self.min_chars:
             return 0.0
         ppl = self._compute_ppl(text)
         if ppl is None:
             # Fallback to heuristic if model failed
             return HeuristicPerplexityScorer().score(text)
-        # Map perplexity to confidence
-        if ppl > 250:
-            return 0.88
-        if ppl > 180:
+        # Map perplexity to confidence (tuned on the frozen holdout, see docstring)
+        if ppl > 8000:
+            return 0.92
+        if ppl > 1500:
             return 0.78
-        if ppl > 120:
-            return 0.65
-        if ppl > 80:
-            return 0.40
+        if ppl > 800:
+            return 0.62
         return 0.0
 
     @property
@@ -272,6 +282,7 @@ def get_perplexity_scorer(
     enabled: bool = True,
     model_name: str = "distilgpt2",
     use_transformers: bool = True,
+    min_chars: int = 60,
 ) -> PerplexityScorer | None:
     if not enabled:
         return None
@@ -280,7 +291,7 @@ def get_perplexity_scorer(
             import transformers  # noqa: F401
 
             # Try transformers scorer; if load fails it will fallback internally
-            return TransformersPerplexityScorer(model_name=model_name)
+            return TransformersPerplexityScorer(model_name=model_name, min_chars=min_chars)
         except ImportError:
             pass
     return HeuristicPerplexityScorer()

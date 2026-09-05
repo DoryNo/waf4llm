@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     heuristic_perplexity_model: str = Field(
         default="distilgpt2", alias="HEURISTIC_PERPLEXITY_MODEL"
     )
+    heuristic_perplexity_min_chars: int = Field(
+        default=60, alias="HEURISTIC_PERPLEXITY_MIN_CHARS", ge=1
+    )
 
     # Classifier
     classifier_model: str = Field(

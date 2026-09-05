@@ -1,9 +1,10 @@
 """Evaluate WAF configs on the frozen holdout (benchmarks/freeze_eval_set.py).
 
-Three configurations, all sharing provenance -> normalizer -> decision layers:
+Four configurations, all sharing provenance -> normalizer -> decision layers:
   heuristic-only  (ENABLE_HEURISTIC=true,  ENABLE_CLASSIFIER=false)
   classifier-only (ENABLE_HEURISTIC=false, ENABLE_CLASSIFIER=true)
   full-pipeline   (both enabled)
+  full+ppl        (both + HEURISTIC_PERPLEXITY_ENABLED=true, distilgpt2)
 
 Prediction mapping (graduated response): block/exclude -> positive;
 sanitize -> positive when confidence >= 0.5; log/allow -> negative.
@@ -48,6 +49,11 @@ CONFIGS: dict[str, dict[str, str]] = {
     "heuristic-only": {"ENABLE_HEURISTIC": "true", "ENABLE_CLASSIFIER": "false"},
     "classifier-only": {"ENABLE_HEURISTIC": "false", "ENABLE_CLASSIFIER": "true"},
     "full-pipeline": {"ENABLE_HEURISTIC": "true", "ENABLE_CLASSIFIER": "true"},
+    "full+ppl": {
+        "ENABLE_HEURISTIC": "true",
+        "ENABLE_CLASSIFIER": "true",
+        "HEURISTIC_PERPLEXITY_ENABLED": "true",
+    },
 }
 
 

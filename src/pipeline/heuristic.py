@@ -190,7 +190,10 @@ class HeuristicLayer:
         try:
             # Try transformers scorer, fallback to heuristic if unavailable
             scorer = get_perplexity_scorer(
-                enabled=True, model_name=self.perplexity_model, use_transformers=True
+                enabled=True,
+                model_name=self.perplexity_model,
+                use_transformers=True,
+                min_chars=self.settings.heuristic_perplexity_min_chars,
             )
             self._perplexity_scorer = scorer
             if scorer and hasattr(scorer, "name"):
